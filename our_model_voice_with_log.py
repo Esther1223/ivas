@@ -5,7 +5,7 @@ except ImportError:
 import torch
 import torch.nn as nn
 from torchvision import models, transforms
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import time
 import os
 import sys
@@ -32,6 +32,9 @@ SAVE_IMAGE_INTERVAL_SEC = 1.0
 # 如果只想存危險/轉向/停止的照片，把這個改成 True。
 # False = 直走、往左、往右、停止都存。
 SAVE_ONLY_WHEN_NOT_STRAIGHT = False
+
+# 把判斷結果疊加在儲存的圖片上
+ENABLE_IMAGE_OVERLAY = True
 
 last_saved_image_time = 0
 
@@ -193,6 +196,59 @@ def save_prediction_log(mode, result, source_image_path="", saved_image_path="",
         print(f"[LOG] 紀錄失敗：{e}")
 
 
+def add_prediction_overlay(img, result):
+    """在輸出圖片上顯示三個區域的分類、信心度與最後決策。"""
+    if not ENABLE_IMAGE_OVERLAY:
+        return img
+
+    annotated = img.copy()
+    draw = ImageDraw.Draw(annotated)
+
+    font_paths = [
+        "C:/Windows/Fonts/arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+    font = ImageFont.load_default()
+    for font_path in font_paths:
+        try:
+            font = ImageFont.truetype(font_path, 14)
+            break
+        except OSError:
+            continue
+
+    decision_text = {
+        "直走": "GO STRAIGHT",
+        "往左": "TURN LEFT",
+        "往右": "TURN RIGHT",
+        "往左或往右": "LEFT OR RIGHT",
+        "停止": "STOP",
+    }.get(result["decision"], result["decision"])
+
+    lines = [
+        f"Decision: {decision_text}",
+        f"L: {result['left'][0]} {result['left'][1]:.2f} -> {result['left_final']}",
+        f"C: {result['center'][0]} {result['center'][1]:.2f} -> {result['center_final']}",
+        f"R: {result['right'][0]} {result['right'][1]:.2f} -> {result['right_final']}",
+    ]
+
+    line_height = 18
+    padding = 6
+    overlay_height = padding * 2 + line_height * len(lines)
+    draw.rectangle(
+        (0, 0, annotated.width, overlay_height),
+        fill=(0, 0, 0),
+    )
+    for index, line in enumerate(lines):
+        draw.text(
+            (padding, padding + index * line_height),
+            line,
+            font=font,
+            fill=(255, 255, 255),
+        )
+
+    return annotated
+
+
 
 
 def save_judged_image(img, result, mode, source_name=""):
@@ -226,7 +282,8 @@ def save_judged_image(img, result, mode, source_name=""):
             filename = f"{timestamp}_{mode}_{safe_decision}_{final_state}.jpg"
 
         save_path = os.path.join(IMAGE_SAVE_DIR, filename)
-        img.save(save_path, quality=90)
+        annotated = add_prediction_overlay(img, result)
+        annotated.save(save_path, quality=90)
 
         last_saved_image_time = now
         return save_path
