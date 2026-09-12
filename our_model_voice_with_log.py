@@ -23,7 +23,7 @@ LOG_PATH = "/home/username/prediction_log.csv"
 
 # 是否把每次判斷的照片也存下來
 ENABLE_SAVE_IMAGES = True
-IMAGE_SAVE_DIR = "/home/username/prediction_images"
+IMAGE_SAVE_DIR = r"C:\Users\USER\Desktop\prediction_images"
 
 # camera 模式如果每一圈都存圖，SD 卡會很快爆掉。
 # 這裡預設至少間隔 1 秒才存一張。想每次都存可改成 0。
@@ -203,6 +203,24 @@ def add_prediction_overlay(img, result):
 
     annotated = img.copy()
     draw = ImageDraw.Draw(annotated)
+
+    # 左、中、右三個判斷區域使用不同顏色標示邊界。
+    boundaries = (
+        (0.45, (255, 80, 80)),
+        (0.25, (80, 255, 120)),
+        (0.75, (80, 255, 120)),
+        (0.55, (80, 150, 255)),
+    )
+    dash_length = 8
+    gap_length = 6
+    for ratio, color in boundaries:
+        x = int(annotated.width * ratio)
+        for y in range(0, annotated.height, dash_length + gap_length):
+            draw.line(
+                (x, y, x, min(y + dash_length, annotated.height)),
+                fill=color,
+                width=2,
+            )
 
     font_paths = [
         "C:/Windows/Fonts/arial.ttf",
